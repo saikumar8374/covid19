@@ -26,20 +26,60 @@ const initializeDbAndServer = async () => {
 };
 initializeDbAndServer();
 
+const authenticationToken = (request, response, next) => {
+  let jwtToken;
+  const authHeader = request.headers["authentication"];
+  if (authHeader !== undefined) {
+    jwtToken = authHeader.split(" ")[1];
+  }
+  if (jwtToken === undefined) {
+    response.status(401);
+    response.send("Invalid jwt Token");
+  } else {
+    jwt.verify(jwtToken, "MY_SECRET_TOKEN", async (error, payload) => {
+      if (error) {
+        response.status(401);
+        response.send("Invalid jwt Token");
+      } else {
+        next();
+      }
+    });
+  }
+};
+
 app.post("/login/", async (request, response) => {
   const { username, password } = request.body;
-  const selectUserQuery = `SELECT * FROM user WHERE username=${username}`;
-  const dbUser = await db.get(selectUserQuery);
-  if (dbUser === undefined) {
+  const selectUserQuery = `SELECT * FROM user WHERE username = '${username}';`;
+  const databaseUser = await db.get(selectUserQuery);
+  if (databaseUser === undefined) {
     response.status(400);
     response.send("Invalid user");
   } else {
-    const isPasswordMatched = await bcrypt.compare(password, dbUser.password);
+    const isPasswordMatched = await bcrypt.compare(
+      password,
+      databaseUser.password
+    );
     if (isPasswordMatched === true) {
-      const payload = { username: username };
-      const jwtToken = await jwt.sign(password, "saikumar");
+      const payload = {
+        username: username,
+      };
+      const jwtToken = jwt.sign(payload, "MY_SECRET_TOKEN");
       response.send({ jwtToken });
+    } else {
+      response.status(400);
+      response.send("Invalid password");
     }
   }
 });
+
+app.get("/states/", authenticationToken, async (request, response) => {
+  const getStatesQuery = `
+          SELECT 
+           * FROM state ;
+        
+        `;
+  const stateList = await db.run(getStatesQuery);
+  response.send(stateList);
+});
+
 module.exports = app;
